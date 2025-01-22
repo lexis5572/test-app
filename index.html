@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Data Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --background-color: #0f172a;
+            --surface-color: #1e293b;
+            --text-color: #f1f5f9;
+            --success-color: #22c55e;
+            --warning-color: #eab308;
+            --error-color: #ef4444;
+            --border-radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .sidebar {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            height: fit-content;
+        }
+
+        .main-content {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .settings-group {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+
+        .settings-group:last-child {
+            border-bottom: none;
+        }
+
+        .settings-group h3 {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .template-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .template-button {
+            padding: 0.75rem;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            background-color: #334155;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .template-button:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .template-button.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        select, input {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #334155;
+            border: 1px solid #475569;
+            color: var(--text-color);
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+        }
+
+        .custom-field {
+            margin-bottom: 1rem;
+        }
+
+        .custom-field label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #94a3b8;
+        }
+
+        .threshold-inputs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .threshold-input {
+            text-align: center;
+        }
+
+        .threshold-input input {
+            margin-top: 0.25rem;
+        }
+
+        .visualization-settings {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .chart-type-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+
+        .chart-type {
+            aspect-ratio: 1;
+            padding: 1rem;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            background-color: #334155;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .chart-type:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .chart-type.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .chart-type svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .data-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .data-card {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .data-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--primary-color);
+        }
+
+        .data-card.success::before {
+            background: var(--success-color);
+        }
+
+        .data-card.warning::before {
+            background: var(--warning-color);
+        }
+
+        .data-card.error::before {
+            background: var(--error-color);
+        }
+
+        .data-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .data-card-title {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .data-card-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .data-card-change {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .data-card-change.positive {
+            color: var(--success-color);
+        }
+
+        .data-card-change.negative {
+            color: var(--error-color);
+        }
+
+        .chart-container {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .chart-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .data-grid {
+            background-color: var(--surface-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .data-grid table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-grid th, .data-grid td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+
+        .data-grid th {
+            background-color: #1f2937;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        .data-grid tr:last-child td {
+            border-bottom: none;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background-color: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="settings-group">
+                <h3>📊 Data Template</h3>
+                <div class="template-selector">
+                    <button class="template-button active" data-template="education">Education</button>
+                    <button class="template-button" data-template="business">Business</button>
+                    <button class="template-button" data-template="health">Health</button>
+                    <button class="template-button" data-template="custom">Custom</button>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>⚙️ Data Configuration</h3>
+                <div class="custom-field">
+                    <label>Primary Metric</label>
+                    <select id="primaryMetric">
+                        <option value="scores">Test Scores</option>
+                        <option value="sales">Sales</option>
+                        <option value="patients">Patient Count</option>
+                        <option value="custom">Custom Metric</option>
+                    </select>
+                </div>
+
+                <div class="custom-field">
+                    <label>Time Period</label>
+                    <select id="timePeriod">
+                        <option value="year">Yearly</option>
+                        <option value="quarter">Quarterly</option>
+                        <option value="month">Monthly</option>
+                        <option value="custom">Custom Period</option>
+                    </select>
+                </div>
+
+                <div class="custom-field">
+                    <label>Category/Group</label>
+                    <select id="category">
+                        <option value="class">Class/Grade</option>
+                        <option value="department">Department</option>
+                        <option value="region">Region</option>
+                        <option value="custom">Custom Group</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>🎯 Performance Thresholds</h3>
+                <div class="threshold-inputs">
+                    <div class="threshold-input">
+                        <label>High</label>
+                        <input type="number" id="highThreshold" value="90">
+                    </div>
+                    <div class="threshold-input">
+                        <label>Medium</label>
+                        <input type="number" id="mediumThreshold" value="70">
+                    </div>
+                    <div class="threshold-input">
+                        <label>Low</label>
+                        <input type="number" id="lowThreshold" value="50">
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>📈 Visualization</h3>
+                <div class="visualization-settings">
+                    <div class="chart-type-selector">
+                        <div class="chart-type active" data-type="bars">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="12" width="4" height="8" />
+                                <rect x="10" y="8" width="4" height="12" />
+                                <rect x="17" y="4" width="4" height="16" />
+                            </svg>
+                            <span>Bar Chart</span>
+                        </div>
+                        <div class="chart-type" data-type="line">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 17l6-6 4 4 8-8" />
+                            </svg>
+                            <span>Line Chart</span>
+                        </div>
+                        <div class="chart-type" data-type="heat">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+                            </svg>
+                            <span>Heat Map</span>
+                        </div>
+                        <div class="chart-type" data-type="radar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                            <span>Radar</span>
+                        </div>
+                    </div>
+
+                    <select id="colorTheme">
+                        <option value="blue">Blue Theme</option>
+                        <option value="green">Green Theme</option>
+                        <option value="purple">Purple Theme</option>
+                        <option value="custom">Custom Theme</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <section class="data-cards">
+                <div class="data-card success">
+                    <div class="data-card-header">
+                        <span class="data-card-title">Average Performance</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20V4M4 12l8-8 8 8" />
+                        </svg>
+                    </div>
+                    <div class="data-card-value">85.7%</div>
+                    <div class="data-card-change positive">
+                        <span>↑ 5.2%</span>
+                        <span>vs last period</span>
+                    </div>
+                </div>
+
+                <div class="data-card warning">
+                    <div class="data-card-header">
+                        <span class="data-card-title">Below
